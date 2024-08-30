@@ -183,4 +183,136 @@ contract TestMyCut is Test {
 
         assert(claimantBalanceAfter > claimantBalanceBefore);
     }
+
+    function testUserCantClaimCutDueToLackOfMatchingTotalRewardsCheck() mintAndApproveTokens public {
+        address player3 = makeAddr("player3");
+
+        vm.startPrank(user);
+        rewards = [20, 50, 100];
+        players = [player1, player2, player3];
+        totalRewards = 100;
+        contest = ContestManager(conMan).createContest(players, rewards, IERC20(ERC20Mock(weth)), totalRewards);
+        ContestManager(conMan).fundContest(0);
+        vm.stopPrank();
+
+         vm.startPrank(player1);
+        Pot(contest).claimCut();
+        vm.stopPrank();
+
+        vm.startPrank(player2);
+        Pot(contest).claimCut();
+        vm.stopPrank();
+
+        vm.startPrank(player3);
+        vm.expectRevert(); // Will revert due to panic: arithmetic underflow or overflow error
+        Pot(contest).claimCut();
+        vm.stopPrank();
+    }
+
+    function testLackOfNumOfPlayersAndNumOfRewardsEqualityCheckEndsInLostOfFunds() mintAndApproveTokens public {
+        address player3 = makeAddr("player3");
+
+        vm.startPrank(user);
+        rewards = [20, 50, 100];
+        players = [player1, player2];
+        totalRewards = 170;
+        contest = ContestManager(conMan).createContest(players, rewards, IERC20(ERC20Mock(weth)), totalRewards);
+        ContestManager(conMan).fundContest(0);
+        vm.stopPrank();
+
+        vm.startPrank(player1);
+        Pot(contest).claimCut();
+        vm.stopPrank();
+
+        vm.startPrank(player2);
+        Pot(contest).claimCut();
+        vm.stopPrank();
+
+        vm.warp(91 days);
+
+        vm.startPrank(user);
+        ContestManager(conMan).closeContest(contest);
+        vm.stopPrank();
+
+        uint256 finalPlayer1Balance = IERC20(ERC20Mock(weth)).balanceOf(player1);
+        uint256 finalPlayer2Balance = IERC20(ERC20Mock(weth)).balanceOf(player2);
+
+        // Player1 balance  should be 20 + (100 - (100-10) /2 ) => 20 + 90/2 => 65
+        uint256 expectedFinalPlayer1Balance = rewards[0] + ((rewards[2] - (rewards[2]/ 10))/players.length);
+        uint256 expectedFinalPlayer2Balance = rewards[1] + ((rewards[2] - (rewards[2]/ 10))/players.length);
+        
+        assertEq(finalPlayer1Balance, expectedFinalPlayer1Balance);
+        assertEq(finalPlayer2Balance, expectedFinalPlayer2Balance);
+    }
+
+    function testRemainingRewardsShouldBeDividedByTheNumberOfClaimers() mintAndApproveTokens public {
+        address player3 = makeAddr("player3");
+
+        vm.startPrank(user);
+        rewards = [20, 50, 100];
+        players = [player1, player2, player3];
+        totalRewards = 170;
+        contest = ContestManager(conMan).createContest(players, rewards, IERC20(ERC20Mock(weth)), totalRewards);
+        ContestManager(conMan).fundContest(0);
+        vm.stopPrank();
+
+        vm.startPrank(player1);
+        Pot(contest).claimCut();
+        vm.stopPrank();
+
+        vm.startPrank(player2);
+        Pot(contest).claimCut();
+        vm.stopPrank();
+
+        vm.warp(91 days);
+
+        vm.startPrank(user);
+        ContestManager(conMan).closeContest(contest);
+        vm.stopPrank();
+
+        uint256 finalPotBalance = IERC20(ERC20Mock(weth)).balanceOf(contest);
+        console.log('finalPotBalance: ', finalPotBalance);
+        // The remaining amount is 30 
+        // ((100 - (100/10)) /3 ) => (100 - 10)/ 3 => 90/3 = 30 
+        // So 30 for each claimer, as there are 2 claimer will remain 30 in the contract 
+        assertEq(finalPotBalance, 30);
+    }
+
+
+    function testLossPrecisionInTheRewardsDistribution() mintAndApproveTokens public {
+        address player3 = makeAddr("player3");
+
+        vm.startPrank(user);
+        rewards = [100, 50, 28];
+        players = [player1, player2, player3];
+        totalRewards = 178;
+        contest = ContestManager(conMan).createContest(players, rewards, IERC20(ERC20Mock(weth)), totalRewards);
+        ContestManager(conMan).fundContest(0);
+        vm.stopPrank();
+
+        vm.startPrank(player1);
+        Pot(contest).claimCut();
+        vm.stopPrank();
+
+        vm.startPrank(player2);
+        Pot(contest).claimCut();
+        vm.stopPrank();
+
+        vm.startPrank(player3);
+        Pot(contest).claimCut();
+        vm.stopPrank();
+
+        vm.warp(91 days);
+
+        vm.startPrank(user);
+        ContestManager(conMan).closeContest(contest);
+        vm.stopPrank();
+
+        uint256 finalPotBalance = IERC20(ERC20Mock(weth)).balanceOf(contest);
+        console.log('finalPotBalance: ', finalPotBalance);
+        
+        // assertEq(finalPotBalance, 1);
+        
+        
+    }
 }

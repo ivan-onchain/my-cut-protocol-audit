@@ -3,8 +3,9 @@ pragma solidity ^0.8.20;
 
 import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import {Test, console} from "lib/forge-std/src/Test.sol";
 
-contract Pot is Ownable(msg.sender) {
+contract Pot is Test , Ownable(msg.sender) {
     error Pot__RewardNotFound();
     error Pot__InsufficientFunds();
     error Pot__StillOpenForClaim();
@@ -47,21 +48,30 @@ contract Pot is Ownable(msg.sender) {
     }
 
     function closePot() external onlyOwner {
+        // q 90 days is the seconds representation?
         if (block.timestamp - i_deployedAt < 90 days) {
             revert Pot__StillOpenForClaim();
         }
         if (remainingRewards > 0) {
             uint256 managerCut = remainingRewards / managerCutPercent;
-            i_token.transfer(msg.sender, managerCut);
 
+            console.log('managerCut: ', managerCut);
+            
+            i_token.transfer(msg.sender, managerCut);
+            console.log('(remainingRewards - managerCut): ', (remainingRewards - managerCut));
+            
             uint256 claimantCut = (remainingRewards - managerCut) / i_players.length;
+
+            console.log('claimantCut: ', claimantCut);
+            
             for (uint256 i = 0; i < claimants.length; i++) {
                 _transferReward(claimants[i], claimantCut);
             }
         }
     }
-
+  
     function _transferReward(address player, uint256 reward) internal {
+        // q should check for success transfer?
         i_token.transfer(player, reward);
     }
 

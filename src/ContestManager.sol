@@ -10,6 +10,8 @@ contract ContestManager is Ownable {
     mapping(address => uint256) public contestToTotalRewards;
 
     error ContestManager__InsufficientFunds();
+    error ContestManager__WrongTotalRewards();
+    error ContestManager__RewardsAndPlayersNotMatch();
 
     constructor() Ownable(msg.sender) {}
 
@@ -21,6 +23,7 @@ contract ContestManager is Ownable {
         // Create a new Pot contract
         Pot pot = new Pot(players, rewards, token, totalRewards);
         contests.push(address(pot));
+        // q should verify totalRewards is the sum of all rewards
         contestToTotalRewards[address(pot)] = totalRewards;
         return address(pot);
     }
