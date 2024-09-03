@@ -283,24 +283,36 @@ contract TestMyCut is Test {
         address player3 = makeAddr("player3");
 
         vm.startPrank(user);
-        rewards = [100, 50, 28];
+        rewards = [333, 333, 31];
         players = [player1, player2, player3];
-        totalRewards = 178;
+        totalRewards = 697;
         contest = ContestManager(conMan).createContest(players, rewards, IERC20(ERC20Mock(weth)), totalRewards);
         ContestManager(conMan).fundContest(0);
         vm.stopPrank();
 
         vm.startPrank(player1);
+        uint cutPlayer1 = Pot(contest).checkCut(player1);
+        console.log('cutPlayer1: ', cutPlayer1);
         Pot(contest).claimCut();
+        uint256 player1PotBalance = IERC20(ERC20Mock(weth)).balanceOf(player1);
+        console.log('player1PotBalance: ', player1PotBalance);
         vm.stopPrank();
 
         vm.startPrank(player2);
+        uint cutPlayer2 = Pot(contest).checkCut(player2);
+        console.log('cutPlayer2: ', cutPlayer2);
         Pot(contest).claimCut();
+        uint256 player2PotBalance = IERC20(ERC20Mock(weth)).balanceOf(player2);
+        console.log('player2PotBalance: ', player2PotBalance);
         vm.stopPrank();
 
-        vm.startPrank(player3);
-        Pot(contest).claimCut();
-        vm.stopPrank();
+        // vm.startPrank(player3);
+        // uint cutPlayer3 = Pot(contest).checkCut(player3);
+        // console.log('cutPlayer3: ', cutPlayer3);
+        // Pot(contest).claimCut();
+        // uint256 player3PotBalance = IERC20(ERC20Mock(weth)).balanceOf(player3);
+        // console.log('player3PotBalance: ', player3PotBalance);
+        // vm.stopPrank();
 
         vm.warp(91 days);
 

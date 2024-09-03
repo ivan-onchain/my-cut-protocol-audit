@@ -61,13 +61,31 @@ Add a conditional to check if totalRewards id equal to the sum of the rewards.
     }
 ```
 
-### [H-2] it doesn't check the returned value from token transfers
+### [H-2] `ContestManager::fundContest` function doesn't check the return value from token transferFrom external call
 
 **Description:** 
 
-In multiple places of the code miss verify The return value of external transfer/transferFrom calls and not all the token revert on fail, some tokens return false is the transfer fails.
+This part of code misses to verify the return value of the external transferFrom calls, this is risky because not all the token transferFrom functions revert on fail, some tokens return false if the transfer fails.
 
-Here are the places where it is happening: `Pot.sol::_transferReward`, `Pot.sol::closePot` and `ContestManager::token.transferFrom`
+**Impact:** 
+
+If the `ContestManager::fundContest`  function does not verify the return value of the transferFrom, the transfer may fail, and the owner will be unaware of this issue until an user try to claim a cut, only to discover that there no funds to claim.
+
+**Proof of Concept:**
+
+1. Owner call `ContestManager::fundContest` to fund the contest.
+2. For any reason transferFrom call fails and returns false because that particular token doesn't revert and owner is unaware about that.
+3. User tries to claim a cut calling `Pot::claimCut` but it isn't possible because the token balance of `Pot` contract is zero.
+
+**Recommended Mitigation:** 
+
+Use SafeERC20, or ensure that the transfer/transferFrom return value is checked.
+
+### [H-3] `ContestManager::claimCut` function lack of verification of the return value in the `transfer` external call
+
+**Description:** 
+
+This part of code misses to verify the return value of the external transfer call, this is risky because not all the token transfer functions revert on fail, some tokens return false if the transfer fails.
 
 **Impact:** 
 
@@ -82,8 +100,48 @@ User realizes he didn't receive their cut, so he tries again but in this case th
 
 Use SafeERC20, or ensure that the transfer/transferFrom return value is checked.
 
+### [H-4] `ContestManager::closePot` function doesn't check return value in the transfer of the `managerCut`
 
-### [H-3] Remaining rewards should be divided by the number of claimers
+**Description:** 
+
+This part of code misses to verify the return value of the external transfer call, this is risky because not all the token transfer functions revert on fail, some tokens return false if the transfer fails.
+
+**Impact:** 
+
+If for any reason the transfer external call to send the cut of the manager fails and the transaction is not reverted, the pot is going to be closed but the manager won't receive their cut which is the main incentive. 
+
+**Proof of Concept:**
+
+1. Owner closes Pot calling `ContestManager::closePot`.
+2. External call `i_token.transfer(msg.sender, managerCut)` fails and returns false.
+3. There is not return value check, so transaction finishes and manager doesn't receive their cut😞.
+
+**Recommended Mitigation:** 
+
+Use SafeERC20, or ensure that the transfer/transferFrom return value is checked.
+
+### [H-5] `ContestManager::closePot` function doesn't confirm return value in the transfer of the `claimantCut`
+
+**Description:** 
+
+This part of code misses to verify the return value of the external transfer call, this is risky because not all the token transfer functions revert on fail, some tokens return false if the transfer fails.
+
+**Impact:** 
+
+If for any reason the transfer external call to send the cut of a claimant fails and the transaction is not reverted, the pot is going to be closed but that claimant won't receive their cut. 
+
+**Proof of Concept:**
+
+1. Owner closes Pot calling `ContestManager::closePot`.
+2. External call `_transferReward(claimants[i], claimantCut)` fails and returns false.
+3. There is not return value check so transaction finish and claimant doesn't receive their cut😞.
+
+**Recommended Mitigation:** 
+
+Use SafeERC20, or ensure that the transfer/transferFrom return value is checked.
+
+
+### [H-6] Remaining rewards should be divided by the number of claimers
 
 **Description:** 
 
@@ -136,6 +194,8 @@ Paste next code in the TestMyCut.sol file
 ```
 
 **Recommended Mitigation:** 
+
+Consider divide into the number of claimant instead of number of players.
 
 ```diff
     function closePot() external onlyOwner {
@@ -228,7 +288,7 @@ Add a condition that the if the number of players is the same than the number of
     }
 ```
 
-### [S-#] There is not a function to sweep the remaining amount due the loss of precision at the division. 
+### [H-1] There is not a function to sweep the remaining amount due the loss of precision at the division. 
 
 **Description:** 
 
@@ -237,10 +297,32 @@ For this reason a function to sweep the remaining dust is a good idea.
 
 **Impact:** 
 
-It is not good to have some remaining amount stuck in the contract.
+Never is good have some dust tokens stuck in the contract, for that reason a function to get it out could be useful.
 
 **Proof of Concept:**
 
+`Pot::closePot` has some divisions that make inevitable to left some token due to Solidity doesn't support decimal number
 
+```js 
+    function closePot() external onlyOwner {
+        // q 90 days is the seconds representation?
+        if (block.timestamp - i_deployedAt < 90 days) {
+            revert Pot__StillOpenForClaim();
+        }
+        if (remainingRewards > 0) {
+@>          uint256 managerCut = remainingRewards / managerCutPercent;
+
+            i_token.transfer(msg.sender, managerCut);
+            
+@>          uint256 claimantCut = (remainingRewards - managerCut) / i_players.length;
+
+            for (uint256 i = 0; i < claimants.length; i++) {
+                _transferReward(claimants[i], claimantCut);
+            }
+        }
+    }
+```
 
 **Recommended Mitigation:** 
+
+Consider add a sweep function fo withdraw the remaining token due to the loss of precision.
